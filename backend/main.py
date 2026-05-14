@@ -1,39 +1,34 @@
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
-import os
+from fastapi import FastAPI, Depends, HTTPException
+from sqlalchemy.orm import Session
+from typing import List
 
-# Если у тебя есть база данных, импорты ниже должны остаться
-# from database import engine, SessionLocal
-# import models
+# Импортируем твои настройки базы и модели
+import models
+from database import engine, SessionLocal
+
+# Создаем таблицы в базе данных (если их еще нет)
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-# Эндпоинт для главной страницы (Витрина сайта)
-@app.get("/", response_class=HTMLResponse)
-async def read_root():
-    # Мы ищем папку templates рядом с файлом main.py
-    # Если папка templates лежит внутри папки backend, путь подстроится автоматически
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    path = os.path.join(current_dir, "templates", "index.html")
-    
+# Функция для получения сессии базы данных
+def get_db():
+    db = SessionLocal()
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    except FileNotFoundError:
-        return """
-        <html>
-            <body style="font-family: sans-serif; text-align: center; padding-top: 50px;">
-                <h1>Ошибка: Файл index.html не найден</h1>
-                <p>Убедись, что папка <b>templates</b> лежит в той же папке, что и <b>main.py</b></p>
-            </body>
-        </html>
-        """
+        yield db
+    finally:
+        db.close()
 
-# Твой существующий эндпоинт для получения товаров из базы
-@app.get("/items")
-async def read_items():
-    # Здесь твоя логика получения данных из БД
-    # Пока возвращаем пустой список для примера, если базы нет
-    return [] 
+# 1. Главная страница (теперь просто JSON, как хотел Данияр)
+@app.get("/")
+async def read_root():
+    return {"status": "success", "message": "Backend API is running"}
 
-# Если у тебя были другие эндпоинты (POST и т.д.), просто оставь их ниже
+# 2. Пример эндпоинта для получения данных (измени 'Item' на свою модель, если надо)
+@app.get("/items", response_model=List[dict]) # заменяем dict на свою схему, если есть
+async def get_items(db: Session = Depends(get_db)):
+    # Здесь мы просто берем всё из таблицы, которую ты создал
+    # Замени models.Item на то название, которое у тебя в models.py
+    items = db.query(models.Item).all()
+    return items
+
