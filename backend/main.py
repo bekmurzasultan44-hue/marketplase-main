@@ -1,34 +1,43 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from typing import List
-
-# Импортируем твои настройки базы и модели
-import models
-from database import engine, SessionLocal
-
-# Создаем таблицы в базе данных (если их еще нет)
-models.Base.metadata.create_all(bind=engine)
+import models, database
 
 app = FastAPI()
 
-# Функция для получения сессии базы данных
+# Разрешаем фронтенду (8080) обращаться к бэкенду (8000)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Создаем таблицы
+models.Base.metadata.create_all(bind=database.engine)
+
 def get_db():
-    db = SessionLocal()
+    db = database.SessionLocal()
     try:
         yield db
     finally:
         db.close()
 
-# 1. Главная страница (теперь просто JSON, как хотел Данияр)
-@app.get("/")
-async def read_root():
-    return {"status": "success", "message": "Backend API is running"}
+# Фронтенд Данияра ищет товары тут:
+@app.get("/api/products")
+def get_products(db: Session = Depends(get_db)):
+    return db.query(models.Product).all()
 
-# 2. Пример эндпоинта для получения данных (измени 'Item' на свою модель, если надо)
-@app.get("/items", response_model=List[dict]) # заменяем dict на свою схему, если есть
-async def get_items(db: Session = Depends(get_db)):
-    # Здесь мы просто берем всё из таблицы, которую ты создал
-    # Замени models.Item на то название, которое у тебя в models.py
-    items = db.query(models.Item).all()
-    return items
+# Фронтенд ищет пользователей тут:
+@app.get("/api/users")
+def get_users(db: Session = Depends(get_db)):
+    return db.query(models.User).all()
 
+# На всякий случай оставляем эндпоинт для всей базы
+@app.get("/api/db")
+def get_full_db(db: Session = Depends(get_db)):
+    return {
+        "users": db.query(models.User).all(),
+        "products": db.query(models.Product).all()
+    }
